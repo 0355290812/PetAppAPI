@@ -4,7 +4,6 @@ const {orderService, paymentService} = require('../services');
 const ApiError = require('../utils/ApiError');
 
 const createOrder = catchAsync(async (req, res) => {
-    console.log('Creating order with body:', req.body);
 
     const statusOrder = req.body.paymentMethod === 'credit_card' ? 'checkout' : 'pending';
     const order = await orderService.createOrder({...req.body, customerId: req.user._id, status: statusOrder});

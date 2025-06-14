@@ -213,7 +213,6 @@ const deleteUserAddress = async (userId, addressId) => {
  */
 const getAddressById = async (userId, addressId) => {
     const user = await getUserById(userId);
-    console.log(user);
 
     const address = user.addresses.find((addr) => addr._id.toString() === addressId);
 
@@ -553,6 +552,41 @@ const getUserAnalytics = async (period, year, month, day) => {
     };
 };
 
+/**
+ * Get user preferences for agent personalization
+ * @param {ObjectId} userId
+ * @returns {Promise<Object>}
+ */
+const getUserPreferencesForAgent = async (userId) => {
+    const user = await getUserById(userId);
+    if (!user) {
+        return null;
+    }
+
+    // Get user's order history for recommendations
+    const orderService = require('./order.service');
+    const orderHistory = await orderService.getOrdersByCustomerId(userId, {limit: 5});
+
+    // Get user's booking history
+    const bookingService = require('./booking.service');
+    const bookingHistory = await bookingService.getBookingsByCustomerId(userId, {limit: 5});
+
+    return {
+        profile: {
+            fullname: user.fullname,
+            email: user.email,
+            phone: user.phone,
+            addresses: user.addresses
+        },
+        preferences: {
+            recentOrders: orderHistory.results,
+            recentBookings: bookingHistory.results,
+            totalOrders: orderHistory.totalResults,
+            totalBookings: bookingHistory.totalResults
+        }
+    };
+};
+
 module.exports = {
     createUser,
     getUsers,
@@ -568,5 +602,6 @@ module.exports = {
     banOrUnbanUser,
     getUserStatistics,
     analyzeUserGrowth,
-    getUserAnalytics
+    getUserAnalytics,
+    getUserPreferencesForAgent
 };

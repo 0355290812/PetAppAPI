@@ -5,7 +5,6 @@ const ApiError = require('../utils/ApiError');
 
 const createBooking = catchAsync(async (req, res) => {
     const statusBooking = req.body.paymentMethod === 'credit_card' ? 'checkout' : 'booked';
-    console.log('statusBooking', statusBooking);
 
     const booking = await bookingService.createBooking({
         ...req.body,

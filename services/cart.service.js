@@ -138,8 +138,6 @@ const updateCartItemQuantity = async (userId, productId, quantity) => {
  */
 const removeCartItem = async (userId, productId) => {
     const cart = await getCartByUserId(userId);
-    console.log(cart);
-
 
     const itemIndex = cart.items.findIndex(item =>
         item.productId._id.toString() === productId.toString()
