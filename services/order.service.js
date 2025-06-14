@@ -3,7 +3,8 @@ const Order = require('../models/order.model');
 const Product = require('../models/product.model'); // Add import for Product model
 const ApiError = require('../utils/ApiError');
 const Review = require('../models/review.model');
-
+const Payment = require('../models/payment.model');
+const {sendNotification} = require('./firebase.service');
 /**
  * Create an order
  * @param {Object} orderBody
@@ -51,7 +52,19 @@ const createOrder = async (orderBody) => {
         }];
     }
 
-    return Order.create(orderBody);
+    const order = await Order.create(orderBody);
+    if (order) {
+        // Send notification to customer for all payment methods
+        await sendNotification({
+            userId: order.customerId._id.toString(),
+            title: 'Đơn hàng mới',
+            body: `Đơn hàng #${ order.orderNumber } đã được đặt thành công.`,
+            link: `/orders/${ order._id }`
+        });
+        return order;
+    } else {
+        throw new ApiError(status.INTERNAL_SERVER_ERROR, 'Failed to create order');
+    }
 };
 
 /**
@@ -158,6 +171,13 @@ const updateOrderById = async (orderId, updateBody) => {
                 timestamp: new Date(),
                 note: "Đơn hàng đã bị huỷ"
             });
+            // Send notification to customer about cancellation
+            await sendNotification({
+                userId: order.customerId._id.toString(),
+                title: 'Đơn hàng đã bị hủy',
+                body: `Đơn hàng #${ order.orderNumber } đã bị hủy. Lý do: ${ updateBody.cancelReason || 'Khác' }`,
+                link: `/orders/${ order._id }`
+            });
             for (const item of order.items) {
                 const product = await Product.findById(item.productId);
                 if (product) {
@@ -172,6 +192,13 @@ const updateOrderById = async (orderId, updateBody) => {
                 timestamp: new Date(),
                 note: 'Đơn hàng đã được giao'
             });
+            // Send notification to customer
+            await sendNotification({
+                userId: order.customerId._id.toString(),
+                title: 'Đơn hàng đã được giao',
+                body: `Đơn hàng #${ order.orderNumber } đã được giao thành công. Vui lòng xác nhận đã nhận hàng.`,
+                link: `/orders/${ order._id }`
+            });
             for (const item of order.items) {
                 const product = await Product.findById(item.productId);
                 if (product) {
@@ -185,6 +212,13 @@ const updateOrderById = async (orderId, updateBody) => {
                 status: 'shipping',
                 timestamp: new Date(),
                 note: 'Đơn hàng đang được giao đến bạn'
+            });
+            // Send notification to customer
+            await sendNotification({
+                userId: order.customerId._id.toString(),
+                title: 'Đơn hàng đang được giao',
+                body: `Đơn hàng #${ order.orderNumber } đang trên đường giao đến bạn.`,
+                link: `/orders/${ order._id }`
             });
         }
     }
@@ -228,7 +262,17 @@ const cancelOrder = async (orderId, cancelReason, cancelledBy) => {
         }
     }
 
-    // Refund payment if paymentMethod is credit card
+    // Send notification to customer about cancellation
+    const notificationBody = cancelledBy === 'customer'
+        ? `Đơn hàng #${ order.orderNumber } đã được hủy theo yêu cầu của bạn.`
+        : `Đơn hàng #${ order.orderNumber } đã bị hủy. Lý do: ${ cancelReason }`;
+
+    await sendNotification({
+        userId: order.customerId._id.toString(),
+        title: 'Đơn hàng đã bị hủy',
+        body: notificationBody,
+        link: `/orders/${ order._id }`
+    });
 
     await order.save();
     return order;
@@ -304,7 +348,25 @@ const processOrderPayment = async (orderId, paymentMethod, paymentDetails = {}) 
                 timestamp: new Date(),
                 note: 'Payment completed'
             });
+
+            // Send notification for successful payment
+            await sendNotification({
+                userId: order.customerId._id.toString(),
+                title: 'Thanh toán thành công',
+                body: `Thanh toán cho đơn hàng #${ order.orderNumber } đã được xử lý thành công. Đơn hàng đang được chuẩn bị.`,
+                link: `/orders/${ order._id }`
+            });
         }
+    } else if (paymentDetails.status === 'failed') {
+        order.paymentStatus = 'failed';
+
+        // Send notification for failed payment
+        await sendNotification({
+            userId: order.customerId._id.toString(),
+            title: 'Thanh toán thất bại',
+            body: `Thanh toán cho đơn hàng #${ order.orderNumber } không thành công. Vui lòng thử lại hoặc chọn phương thức thanh toán khác.`,
+            link: `/orders/${ order._id }`
+        });
     }
 
     await order.save();
@@ -327,7 +389,7 @@ const queryOrders = async (filter = {}, options = {}) => {
         .sort(sortBy)
         .skip(skip)
         .limit(limit)
-        .populate('customerId', 'fullname email phone');
+        .populate('customerId', 'fullname email phone avatar');
 
     const totalResults = await Order.countDocuments(filter);
 
@@ -384,6 +446,14 @@ const confirmOrderDelivery = async (orderId, userId) => {
             await product.save();
         }
     }
+
+    // Send notification to customer about delivery confirmation
+    await sendNotification({
+        userId: order.customerId._id.toString(),
+        title: 'Đơn hàng đã được giao',
+        body: `Đơn hàng #${ order.orderNumber } đã được giao. Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.`,
+        link: `/orders/${ order._id }`
+    });
 
     await order.save();
     return order;
@@ -497,6 +567,58 @@ const getOrderAnalytics = async (period, year, month, day) => {
     };
 };
 
+const deleteExpiredOrders = async () => {
+    try {
+        const now = new Date();
+        const expirationTime = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutes ago
+
+        // Find expired checkout orders
+        const expiredOrders = await Order.find({
+            status: 'checkout',
+            createdAt: {$lt: expirationTime}
+        }).populate('items.productId');
+
+        let deletedCount = 0;
+        let restoredProducts = 0;
+        let deletedPayments = 0;
+
+        for (const order of expiredOrders) {
+            try {
+                // Restore product stock
+                for (const item of order.items) {
+                    if (item.productId) {
+                        const product = await Product.findById(item.productId._id);
+                        if (product) {
+                            product.stock += item.quantity;
+                            await product.save();
+                            restoredProducts++;
+                        }
+                    }
+                }
+
+                // Delete related payment if exists
+                if (order.paymentId) {
+                    const deletedPayment = await Payment.findByIdAndDelete(order.paymentId);
+                    if (deletedPayment) {
+                        deletedPayments++;
+                    }
+                }
+
+                // Delete the order
+                await Order.findByIdAndDelete(order._id);
+                deletedCount++;
+
+            } catch (itemError) {
+                console.error(`Error processing order ${ order.orderNumber }:`, itemError);
+            }
+        }
+        return
+    } catch (error) {
+        console.error('Error in deleteExpiredOrders:', error);
+        throw new ApiError(status.INTERNAL_SERVER_ERROR, `Failed to delete expired orders: ${ error.message }`);
+    }
+};
+
 module.exports = {
     createOrder,
     getOrderById,
@@ -510,5 +632,6 @@ module.exports = {
     queryOrders,
     processOrderPayment,
     confirmOrderDelivery,
-    getOrderAnalytics
+    getOrderAnalytics,
+    deleteExpiredOrders,
 };

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const {v4: uuidv4} = require('uuid');
 
 const orderItemSchema = new mongoose.Schema({
     productId: {
@@ -159,8 +160,12 @@ const orderSchema = new mongoose.Schema({
 // Pre-save hook to generate order number
 orderSchema.pre('save', async function(next) {
     if (!this.orderNumber) {
-        const count = await mongoose.model('Order').countDocuments();
-        this.orderNumber = `ORD-${ (count + 1).toString().padStart(6, '0') }`;
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+        const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, ''); // HHMMSS
+        const uuid = uuidv4().split('-')[0].toUpperCase(); // First 8 chars of UUID
+
+        this.orderNumber = `ORD_${ dateStr }${ timeStr }${ uuid }`;
     }
     next();
 });

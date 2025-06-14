@@ -24,6 +24,8 @@ app.use(cors());
 // API routes
 app.use('/api', routes);
 
+require('./utils/cron'); // Import cron jobs
+
 // Send 404 for unknown API requests
 // app.use((req, res, next) => {
 //     next(new ApiError(status.NOT_FOUND, 'Not found'));

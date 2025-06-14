@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const {v4: uuidv4} = require('uuid');
 
 const paymentSchema = new mongoose.Schema({
     paymentNumber: {
@@ -46,8 +47,12 @@ const paymentSchema = new mongoose.Schema({
 // Pre-save hook to generate payment number
 paymentSchema.pre('save', async function(next) {
     if (!this.paymentNumber) {
-        const count = await mongoose.model('Payment').countDocuments();
-        this.paymentNumber = `PMT-${ (count + 1).toString().padStart(6, '0') }`;
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+        const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, ''); // HHMMSS
+        const uuid = uuidv4().split('-')[0].toUpperCase(); // First 8 chars of UUID
+
+        this.paymentNumber = `PM_${ dateStr }${ timeStr }${ uuid }`;
     }
     next();
 });

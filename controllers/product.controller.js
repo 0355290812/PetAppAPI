@@ -151,8 +151,6 @@ const getProducts = catchAsync(async (req, res) => {
         filter.stock = {$gt: 0};
     }
 
-    console.log('filter', filter);
-
     const result = await productService.getAllProducts(filter, options);
     res.send(result);
 });

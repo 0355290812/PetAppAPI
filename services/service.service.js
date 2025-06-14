@@ -447,8 +447,6 @@ const filterAvailableSlots = (allSlots, bookedSlots, capacity) => {
 
     // Reduce available spots based on bookings
     bookedSlots.forEach(booked => {
-        console.log(`Booked slot: ${ booked.startTime } - ${ booked.endTime }`);
-
         const bookedStartMinutes = timeToMinutes(booked.startTime);
         const bookedEndMinutes = timeToMinutes(booked.endTime);
 

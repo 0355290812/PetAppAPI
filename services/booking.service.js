@@ -3,6 +3,8 @@ const Booking = require('../models/booking.model');
 const Service = require('../models/service.model');
 const Pet = require('../models/pet.model');
 const ApiError = require('../utils/ApiError');
+const Payment = require('../models/payment.model');
+const {sendNotification} = require('./firebase.service');
 
 /**
  * Create a booking
@@ -30,7 +32,17 @@ const createBooking = async (bookingBody) => {
         }
     }
 
-    return Booking.create(bookingBody);
+    const booking = await Booking.create(bookingBody);
+    if (booking && booking.status === 'booked') {
+        // Send notification to customer
+        await sendNotification({
+            userId: booking.customerId._id.toString(),
+            title: 'Lịch hẹn đã được đặt',
+            body: `Lịch hẹn của bạn với dịch vụ ${ service.name } đã được xác nhận.`,
+            link: `/bookings/${ booking._id }`
+        });
+    }
+    return booking;
 };
 
 /**
@@ -46,7 +58,7 @@ const getBookingById = async (id) => {
         })
         .populate({
             path: 'petsId',
-            select: 'name species breed birthDate',
+            select: 'name species breed birthDate avatar',
         }).
         populate({
             path: 'customerId',
@@ -97,6 +109,9 @@ const getBookingsByCustomerId = async (customerId, options = {}) => {
         .populate({
             path: 'petsId',
             select: 'name species breed birthDate',
+        })
+        .populate({
+            path: 'paymentId'
         })
         ;
 
@@ -162,7 +177,7 @@ const getBookingsByStaffAndAdmin = async (options = {}) => {
         .limit(limit)
         .populate({
             path: 'serviceId',
-            select: 'name price onSale salePrice',
+            select: 'name price onSale salePrice images',
         })
         .populate({
             path: 'petsId',
@@ -229,6 +244,12 @@ const updateBookingById = async (bookingId, updateBody, role) => {
         booking.cancelledBy = role === 'user' ? 'customer' : 'admin';
 
         await booking.save();
+        sendNotification({
+            userId: booking.customerId._id.toString(),
+            title: 'Lịch hẹn đã bị huỷ',
+            body: `Lịch hẹn của bạn với dịch vụ ${ booking.serviceId.name } đã bị huỷ.`,
+            link: `/bookings/${ booking._id }`
+        });
         return booking;
     }
 
@@ -248,6 +269,13 @@ const updateBookingById = async (bookingId, updateBody, role) => {
         }
         service.usageCount = (service.usageCount || 0) + 1;
         await service.save();
+
+        sendNotification({
+            userId: booking.customerId._id.toString(),
+            title: 'Lịch hẹn đã hoàn thành',
+            body: `Lịch hẹn của bạn với dịch vụ ${ service.name } đã được hoàn thành.`,
+            link: `/bookings/${ booking._id }`
+        });
 
         await booking.save();
         return booking;
@@ -297,6 +325,12 @@ const cancelBooking = async (bookingId, cancellationReason, role = "user") => {
     booking.cancelledBy = role === 'user' ? 'customer' : 'admin';
 
     await booking.save();
+    sendNotification({
+        userId: booking.customerId._id.toString(),
+        title: 'Lịch hẹn đã bị huỷ',
+        body: `Lịch hẹn của bạn với dịch vụ ${ booking.serviceId.name } đã bị huỷ.`,
+        link: `/bookings/${ booking._id }`
+    });
     return booking;
 };
 
@@ -474,6 +508,23 @@ const getBookingAnalytics = async (period, year, month, day) => {
     };
 };
 
+const deleteExpiredBookings = async () => {
+    const now = new Date();
+    const expirationTime = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutes ago
+
+    const result = await Booking.find({
+        status: 'checkout',
+        createdAt: {$lt: expirationTime}
+    });
+
+    result.forEach(async (booking) => {
+        if (booking.paymentId) {
+            await Payment.deleteOne({_id: booking.paymentId});
+        }
+        await Booking.deleteOne({_id: booking._id});
+    });
+};
+
 module.exports = {
     createBooking,
     getBookingById,
@@ -484,5 +535,6 @@ module.exports = {
     cancelBooking,
     updateBookingServiceRecord,
     getUpcomingBookings,
-    getBookingAnalytics
+    getBookingAnalytics,
+    deleteExpiredBookings
 };

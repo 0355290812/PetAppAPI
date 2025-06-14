@@ -8,9 +8,9 @@ const ApiError = require('../utils/ApiError');
  * @param {Response} res
  * @param {NextFunction} next
  */
-const errorConverter = (err, req, res, next) => {  
+const errorConverter = (err, req, res, next) => {
     console.log(err);
-    
+
     let error = err;
     if (!(error instanceof ApiError)) {
         const statusCode = error.statusCode || error instanceof SyntaxError

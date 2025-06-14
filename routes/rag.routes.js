@@ -16,5 +16,17 @@ router.post(
     auth,
     ragController.chat
 );
+router.get(
+    '/documents',
+    auth,
+    authorize('admin'),
+    ragController.getDocuments
+);
+router.delete(
+    '/documents/:documentId',
+    auth,
+    authorize('admin'),
+    ragController.deleteDocument
+);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const {status} = require('http-status');
 const catchAsync = require('../utils/catchAsync');
 const ragService = require('../services/rag.service');
+const chatService = require('../services/chat.service');
 const ApiError = require('../utils/ApiError');
 const path = require('path');
 const fs = require('fs');
@@ -31,7 +32,7 @@ const uploadDocuments = catchAsync(async (req, res) => {
             }
 
             // Xử lý upload và indexing
-            const result = await ragService.indexDocument(file.path);
+            const result = await ragService.indexDocument(file);
             results.push({
                 fileName: file.originalname,
                 ...result
@@ -62,7 +63,8 @@ const chat = catchAsync(async (req, res) => {
         throw new ApiError(status.BAD_REQUEST, 'Question is required');
     }
 
-    const answer = await ragService.chat(question, req.user._id);
+    const answer = await chatService.chat(req.user._id, question);
+
     res.status(status.OK).send({
         code: status.OK,
         message: 'Answer retrieved successfully',
@@ -70,7 +72,36 @@ const chat = catchAsync(async (req, res) => {
     });
 });
 
+const getDocuments = catchAsync(async (req, res) => {
+    const documents = await ragService.getDocuments();
+    res.status(status.OK).send({
+        code: status.OK,
+        message: 'Documents retrieved successfully',
+        data: documents
+    });
+});
+
+const deleteDocument = catchAsync(async (req, res) => {
+    const {documentId} = req.params;
+    if (!documentId) {
+        throw new ApiError(status.BAD_REQUEST, 'Document ID is required');
+    }
+
+    const result = await ragService.deleteDocument(documentId);
+    if (!result) {
+        throw new ApiError(status.NOT_FOUND, 'Document not found');
+    }
+
+    res.status(status.OK).send({
+        code: status.OK,
+        message: 'Document deleted successfully',
+        data: result
+    });
+});
+
 module.exports = {
     uploadDocuments,
-    chat
+    chat,
+    getDocuments,
+    deleteDocument
 };

@@ -68,25 +68,25 @@ const createStorage = (directory) => {
 const categoryImageUpload = multer({
     storage: createStorage(categoryUploadDir),
     fileFilter: imageFileFilter,
-    limits: {fileSize: 5 * 1024 * 1024} // 5MB limit
+    limits: {fileSize: 100 * 1024 * 1024} // 5MB limit
 });
 
 const productImageUpload = multer({
     storage: createStorage(productUploadDir),
     fileFilter: imageFileFilter,
-    limits: {fileSize: 5 * 1024 * 1024}
+    limits: {fileSize: 100 * 1024 * 1024}
 });
 
 const userImageUpload = multer({
     storage: createStorage(userUploadDir),
     fileFilter: imageFileFilter,
-    limits: {fileSize: 5 * 1024 * 1024}
+    limits: {fileSize: 100 * 1024 * 1024}
 });
 
 const petImageUpload = multer({
     storage: createStorage(petUploadDir),
     fileFilter: imageFileFilter,
-    limits: {fileSize: 5 * 1024 * 1024}
+    limits: {fileSize: 100 * 1024 * 1024}
 });
 
 const serviceImageUpload = multer({
@@ -104,7 +104,7 @@ const ragDocumentUpload = multer({
 const reviewImageUpload = multer({
     storage: createStorage(reviewUploadDir),
     fileFilter: imageFileFilter,
-    limits: {fileSize: 5 * 1024 * 1024}
+    limits: {fileSize: 100 * 1024 * 1024}
 });
 
 module.exports = {

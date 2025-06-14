@@ -10,3 +10,4 @@ module.exports.reviewService = require('./review.service');
 module.exports.serviceService = require('./service.service');
 module.exports.userService = require('./user.service');
 module.exports.ragService = require('./rag.service');
+module.exports.firebaseService = require('./firebase.service');
